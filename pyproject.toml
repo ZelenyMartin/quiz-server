@@ -1,0 +1,18 @@
+[project]
+name = "quiz-server"
+version = "0.1.0"
+description = "Quiz server"
+authors = [
+    {name = "Martin Zeleny", email = "martin.zeleny@volny.cz"},
+]
+dependencies = [
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0.post1",
+    "aioconsole>=0.6.2",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+
+[tool.pdm.scripts]
+start = "uvicorn quiz_server.__main__:app --reload"
