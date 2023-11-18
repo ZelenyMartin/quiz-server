@@ -1,0 +1,25 @@
+name: Simple example quiz to show how does it work
+questions:
+  - text: This question has one correct answer which is A
+    time_limit: 30
+    options:
+      - answer: Yes, this is the correct answer
+        correct: true
+      - answer: Not correct
+        correct: false
+      - answer: Not correct
+        correct: false
+      - answer: Not correct
+        correct: false
+
+  - text: "This question has two correct answers: C and D"
+    time_limit: 30
+    options:
+      - answer: Not correct
+        correct: false
+      - answer: Not correct
+        correct: false
+      - answer: Select this
+        correct: true
+      - answer: And also this
+        correct: true

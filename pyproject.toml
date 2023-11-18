@@ -9,10 +9,13 @@ dependencies = [
     "fastapi>=0.104.1",
     "uvicorn[standard]>=0.24.0.post1",
     "aioconsole>=0.6.2",
+    "ruamel-yaml>=0.18.5",
+    "dataclasses>=0.6",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
 license = {text = "MIT"}
 
 [tool.pdm.scripts]
-start = "uvicorn quiz_server.__main__:app --reload"
+start = "uvicorn quiz_server.__main__:app --log-level warning --reload"
+#start = "uvicorn quiz_server.__main__:app --reload"
