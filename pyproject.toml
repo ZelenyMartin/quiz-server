@@ -16,6 +16,10 @@ requires-python = ">=3.11"
 readme = "README.md"
 license = {text = "MIT"}
 
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
 [tool.pdm.scripts]
 start = "uvicorn quiz_server.__main__:app --log-level warning --reload"
 #start = "uvicorn quiz_server.__main__:app --reload"
