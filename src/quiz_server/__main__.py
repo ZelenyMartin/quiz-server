@@ -5,6 +5,7 @@ import logging
 import aioconsole
 import os
 import signal
+import string
 from dataclasses import dataclass, field
 from ruamel.yaml import YAML
 
@@ -24,6 +25,9 @@ class Question:
     def __post_init__(self):
         self.options = [Option(**opt) for opt in self.options]
 
+    def ask(self) -> dict:
+        return {'text': self.text, 'options': [opt.answer for opt in self.options]}
+
 
 @dataclass
 class Quiz:
@@ -34,15 +38,16 @@ class Quiz:
     def __post_init__(self):
         self.questions = [Question(**q) for q in self.questions]
 
+    def __next__(self) -> Question:
+        try:
+            question = self.questions[self.current_question]
+        except IndexError:
+            raise StopIteration
 
-    def get_questions(self):
-        for order, question in enumerate(self.questions, start=1):
-            self.current_question = order
-            yield {'text': question.text,
-                   'options': [opt.answer for opt in question.options]}
+        self.current_question += 1
+        return question
 
-
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.questions)
 
 
@@ -59,12 +64,10 @@ class Players:
     def add(self, player: Player):
         self._players.append(player)
 
-
     def remove(self, player: Player):
         self._players.remove(player)
 
-
-    async def send_question(self, question: dict):
+    async def send_question(self, question: dict | str):
         for player in self._players:
             await player.websocket.send_json(question)
 
@@ -78,15 +81,14 @@ async def lifespan(app: FastAPI):
 
     yaml = YAML(typ='safe')
     with open(quiz_file, encoding='utf-8') as file:
-        data = yaml.load(file)
+        quiz_data = yaml.load(file)
 
-    app.state.quiz = Quiz(**data)
+    app.state.quiz = Quiz(**quiz_data)
     app.state.players = Players()
-    logger.warn("Registred players:")
     asyncio.ensure_future(control_server())
 
-    yield
-    logger.warn("\nBye!")
+    yield  # Second half of a life span - this is executed once server exits
+    logger.warn("\nServer quit")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -101,8 +103,7 @@ async def register(ws: WebSocket, player_id: str):
 
     player = Player(player_id, ws)
     app.state.players.add(player)
-
-    logger.warn(f'{player_id}')
+    print(player_id)
 
     try:
         while True:
@@ -114,7 +115,14 @@ async def register(ws: WebSocket, player_id: str):
 
 
 async def control_server():
-    questions = app.state.quiz.get_questions()
+    '''Wait for all players to login to the quiz'''
+    print("Send 'y' to start the quiz")
+    print("Registred players:")
+
+    while True:
+        proceed_char = await aioconsole.ainput()
+        if proceed_char.lower() == 'y':
+            break
 
     while True:
         proceed_char = await aioconsole.ainput("Proceed [y/N]: ")
@@ -122,10 +130,24 @@ async def control_server():
             continue
 
         try:
-            question = next(questions)
-            print(f'{app.state.quiz.current_question}/{len(app.state.quiz)}')
+            question = next(app.state.quiz)
         except StopIteration:
-            question = "Quiz ended"
+            end_quiz()
+            break
 
-        logger.warn(question)
-        await app.state.players.send_question(question)
+        print(
+            f'[Question {app.state.quiz.current_question}/{len(app.state.quiz)}]')
+        print_question(question)
+        await app.state.players.send_question(question.ask())
+
+
+def print_question(question: Question):
+    '''Nicely print text of the question with possible answeres'''
+
+    print(question.text)
+    for letter, opt in zip(string.ascii_letters, question.options):
+        print(f'\t{letter}) {opt.answer}')
+
+
+def end_quiz():
+    print("Quiz ended")
