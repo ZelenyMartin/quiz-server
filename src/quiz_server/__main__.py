@@ -4,10 +4,12 @@ import asyncio
 import logging
 import aioconsole
 import os
+import sys
 import signal
 import string
 from dataclasses import dataclass, field
 from ruamel.yaml import YAML
+from datetime import datetime
 
 
 @dataclass
@@ -76,7 +78,7 @@ class Players:
 async def lifespan(app: FastAPI):
     quiz_file = os.environ.get('QUIZ')
     if not quiz_file:
-        logger.critical("Environment variable QUIZ was not set.")
+        print("Environment variable QUIZ was not set!")
         os.kill(os.getpid(), signal.SIGKILL)
 
     yaml = YAML(typ='safe')
@@ -85,14 +87,19 @@ async def lifespan(app: FastAPI):
 
     app.state.quiz = Quiz(**quiz_data)
     app.state.players = Players()
+    logging.info(f'Quiz server started running quiz: {app.state.quiz.name}')
     asyncio.ensure_future(control_server())
 
     yield  # Second half of a life span - this is executed once server exits
-    logger.warn("\nServer quit")
+    logging.info("Quiz server quit")
 
 
 app = FastAPI(lifespan=lifespan)
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(message)s",
+    filename=datetime.now().strftime("quiz-log_%Y-%m-%d_%H:%M:%S.txt")
+)
 
 
 @app.websocket("/register/{player_id}")
@@ -104,18 +111,20 @@ async def register(ws: WebSocket, player_id: str):
     player = Player(player_id, ws)
     app.state.players.add(player)
     print(player_id)
+    logging.info(f'{player_id} has connected')
 
     try:
         while True:
             data = await ws.receive_text()
-            print(f"\nClient {player_id} {ws}: {data}")
+            logging.info(f"Client {player_id} sent: {data}")
     except WebSocketDisconnect:
-        logger.warn(f"{player_id} disconected")
+        logging.info(f"{player_id} disconected")
         app.state.players.remove(player)
 
 
 async def control_server():
     '''Wait for all players to login to the quiz'''
+
     print("Send 'y' to start the quiz")
     print("Registred players:")
 
@@ -132,11 +141,9 @@ async def control_server():
         try:
             question = next(app.state.quiz)
         except StopIteration:
-            end_quiz()
+            await end_quiz()
             break
 
-        print(
-            f'[Question {app.state.quiz.current_question}/{len(app.state.quiz)}]')
         print_question(question)
         await app.state.players.send_question(question.ask())
 
@@ -144,10 +151,20 @@ async def control_server():
 def print_question(question: Question):
     '''Nicely print text of the question with possible answeres'''
 
+    question_order = f'{app.state.quiz.current_question}/{len(app.state.quiz)}'
+    logging.info(f'Question: {question_order}')
+    print(f'\n[Question {question_order}]')
+
+    logging.info(f'Question text: {question.text}')
     print(question.text)
+
     for letter, opt in zip(string.ascii_letters, question.options):
+        logging.info(opt)
         print(f'\t{letter}) {opt.answer}')
 
 
-def end_quiz():
-    print("Quiz ended")
+async def end_quiz():
+    '''Print results of the quiz'''
+    msg = "Quiz ended"
+    print(msg)
+    await app.state.players.send_question(msg)
