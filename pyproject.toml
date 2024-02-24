@@ -23,4 +23,3 @@ build-backend = "pdm.backend"
 
 [tool.pdm.scripts]
 start = "uvicorn quiz_server.__main__:app --log-level warning --reload"
-#start = "uvicorn quiz_server.__main__:app --reload"
