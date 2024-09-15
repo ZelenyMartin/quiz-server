@@ -4,6 +4,7 @@ import asyncio
 import logging
 import aioconsole
 import os
+import sys
 import signal
 import string
 from dataclasses import dataclass, field
@@ -30,19 +31,20 @@ class Question:
     def __post_init__(self) -> None:
         self.options = [Option(**opt) for opt in self.options]
 
-    def print(self) -> None:
+    def __str__(self) -> str:
         '''Nicely print text of the question with possible answeres'''
 
-        question_label = f'Question number {app.state.quiz.current_question}/{len(app.state.quiz)}'
+        question_label = f'Question number {app.state.quiz.current_question + 1}/{len(app.state.quiz)}'
         logging.info(question_label)
-        print(f'\n{question_label}')
-
         logging.info(f'Question text: {self.text}')
-        print(self.text)
+
+        output = f'\n{question_label}\n{self.text}\n'
 
         for letter, opt in zip(string.ascii_letters, self.options):
             logging.info(opt)
-            print(f'\t{letter}) {opt.answer}')
+            output += f'\t{letter}) {opt.answer}\n'
+
+        return output
 
     def ask(self) -> dict:
         return {
@@ -56,33 +58,33 @@ class Question:
 class Quiz:
     name: str
     questions: list[Question] = field(default_factory=list)
-    current_question: int = 0
+    current_question: int = -1
 
     def __post_init__(self):
         self.questions = [Question(**q) for q in self.questions]
 
     def __next__(self) -> Question:
+        self.current_question += 1
         try:
             question = self.questions[self.current_question]
         except IndexError:
             raise StopIteration
 
-        self.current_question += 1
         return question
 
     def __len__(self) -> int:
         return len(self.questions)
 
-    def print_results(self):
-        print("Results...")
+    @property
+    def question(self):
+        return self.questions[self.current_question]
 
 
 @dataclass
 class Player:
-    _id: str
     _websocket: WebSocket
+    name: str
     accepting_answer: bool = False
-    score: int = 0
 
     async def send(self, data: dict):
         await self._websocket.send_json(data)
@@ -118,6 +120,21 @@ class Players:
             await player.close_connection(msg)
 
 
+class Results:
+    _results: dict[(str, int), int] = {}
+
+    def check_answer(self, player: Player, question: Question, question_number: int, answer: str):
+        self._results[(player.name, question_number)] = answer
+
+    def __str__(self):
+        output = "\nResults:\n"
+
+        for (name, qustion), result in self._results.items():
+            output += f'{name}\t{qustion}\t{result}\n'
+
+        return output
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -135,6 +152,7 @@ async def lifespan(app: FastAPI):
         shutdown_server(f"Can't load a quiz file: {quiz_file}")
 
     app.state.players = Players()
+    app.state.results = Results()
     logging.info(f'Quiz server started running quiz: {app.state.quiz.name}')
     asyncio.ensure_future(control_server())
 
@@ -148,35 +166,40 @@ logging.basicConfig(
     format="%(asctime)s.%(msecs)03d|%(message)s",
     datefmt='%H:%M:%S',
     # filename=f'{datetime.now():quiz-log_%Y-%m-%d_%H:%M:%S.txt}'
-    filename='quiz-log.txt'
+    filename='quiz-log_.txt'
 )
 
 
-@app.websocket("/connect/{player_id}")
-async def connect(ws: WebSocket, player_id: str):
+@app.websocket("/connect/{player_name}")
+async def connect(ws: WebSocket, player_name: str):
     await ws.accept()
     await ws.send_json({'text': app.state.quiz.name})
     await ws.send_json({'text': 'Check your name on the screen!'})
 
-    player = Player(player_id, ws)
+    player = Player(ws, player_name)
     app.state.players.add(player)
 
-    msg = f'{player_id} has connected'
+    msg = f'{player_name} has connected'
     print(msg)
     logging.info(msg)
 
     try:
         while True:
             data = await ws.receive_json()
-            logging.info(f"Client {player_id} sent: {data}")
+            logging.info(f"Client {player_name} sent: {data}")
 
             if player.accepting_answer:
                 await player.send({'type': 'repeat', 'text': data['answer']})
                 player.accepting_answer = False
-                check_anwser()
+                app.state.results.check_answer(
+                    player,
+                    app.state.quiz.question,
+                    app.state.quiz.current_question,
+                    data['answer']
+                )
 
     except WebSocketDisconnect:
-        logging.info(f"{player_id} has disconected")
+        logging.info(f"{player_name} has disconected")
         app.state.players.remove(player)
 
 
@@ -195,14 +218,14 @@ async def control_server() -> None:
         try:
             question = next(app.state.quiz)
         except StopIteration:
-            app.state.quiz.print_results()
+            print(app.state.results)
 
             msg = "Quiz ended"
             await app.state.players.close_connection(msg)
 
             shutdown_server(msg)
 
-        question.print()
+        print(question, end='')
         app.state.players.unblock_players()
         await app.state.players.send(question.ask())
 
@@ -214,7 +237,3 @@ def shutdown_server(msg: str) -> None:
     print(f'\n{msg}')
     os.kill(os.getppid(), signal.SIGTERM)  # Quit parent process - Uvicorn server
     os.kill(os.getpid(), signal.SIGKILL)   # Kill Quiz server
-
-
-def check_anwser():
-    ...
