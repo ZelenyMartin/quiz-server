@@ -1,19 +1,17 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from contextlib import asynccontextmanager
 import asyncio
 import logging
-import aioconsole
 import os
-import sys
 import signal
 import string
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+
+import aioconsole
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
-from datetime import datetime
 
-import ruamel.yaml
-import ruamel.yaml.error
+# from datetime import datetime
 
 
 @dataclass
@@ -32,25 +30,26 @@ class Question:
         self.options = [Option(**opt) for opt in self.options]
 
     def __str__(self) -> str:
-        '''Nicely print text of the question with possible answeres'''
+        """Nicely print text of the question with possible answeres"""
 
-        question_label = f'Question number {app.state.quiz.current_question + 1}/{len(app.state.quiz)}'
+        question_label = f"Question number {
+            app.state.quiz.current_question + 1}/{len(app.state.quiz)}"
         logging.info(question_label)
-        logging.info(f'Question text: {self.text}')
+        logging.info(f"Question text: {self.text}")
 
-        output = f'\n{question_label}\n{self.text}\n'
+        output = f"\n{question_label}\n{self.text}\n"
 
         for letter, opt in zip(string.ascii_letters, self.options):
             logging.info(opt)
-            output += f'\t{letter}) {opt.answer}\n'
+            output += f"\t{letter}) {opt.answer}\n"
 
         return output
 
     def ask(self) -> dict:
         return {
-            'type': 'question',
-            'text': self.text,
-            'options': [opt.answer for opt in self.options]
+            "type": "question",
+            "text": self.text,
+            "options": [opt.answer for opt in self.options],
         }
 
 
@@ -96,8 +95,7 @@ class Player:
 class Players:
     _players: list[Player] = []
 
-    def find(self, player_id: str):
-        ...
+    def find(self, player_id: str): ...
 
     def add(self, player: Player):
         self._players.append(player)
@@ -114,23 +112,25 @@ class Players:
             await player.send(data)
 
     async def close_connection(self, msg: str):
-        '''Print results of the quiz and disconnect the clients'''
+        """Print results of the quiz and disconnect the clients"""
 
         for player in self._players:
             await player.close_connection(msg)
 
 
 class Results:
-    _results: dict[(str, int), int] = {}
+    _results: dict[tuple[str, int], str] = {}
 
-    def check_answer(self, player: Player, question: Question, question_number: int, answer: str):
+    def check_answer(
+        self, player: Player, question: Question, question_number: int, answer: str
+    ):
         self._results[(player.name, question_number)] = answer
 
     def __str__(self):
         output = "\nResults:\n"
 
         for (name, qustion), result in self._results.items():
-            output += f'{name}\t{qustion}\t{result}\n'
+            output += f"{name}\t{qustion}\t{result}\n"
 
         return output
 
@@ -138,13 +138,13 @@ class Results:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        quiz_file = os.environ['QUIZ']
+        quiz_file = os.environ["QUIZ"]
     except KeyError:
         shutdown_server("Environment variable QUIZ was not set!")
 
-    yaml = YAML(typ='safe')
+    yaml = YAML(typ="safe")
     try:
-        with open(quiz_file, encoding='utf-8') as file:
+        with open(quiz_file, encoding="utf-8") as file:
             quiz_data = yaml.load(file)
 
         app.state.quiz = Quiz(**quiz_data)
@@ -153,7 +153,7 @@ async def lifespan(app: FastAPI):
 
     app.state.players = Players()
     app.state.results = Results()
-    logging.info(f'Quiz server started running quiz: {app.state.quiz.name}')
+    logging.info(f"Quiz server started running quiz: {app.state.quiz.name}")
     asyncio.ensure_future(control_server())
 
     yield  # Second half of a life span - this is executed once server exits
@@ -164,22 +164,22 @@ app = FastAPI(lifespan=lifespan)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s.%(msecs)03d|%(message)s",
-    datefmt='%H:%M:%S',
+    datefmt="%H:%M:%S",
     # filename=f'{datetime.now():quiz-log_%Y-%m-%d_%H:%M:%S.txt}'
-    filename='quiz-log_.txt'
+    filename="quiz-log_.txt",
 )
 
 
 @app.websocket("/connect/{player_name}")
 async def connect(ws: WebSocket, player_name: str):
     await ws.accept()
-    await ws.send_json({'text': app.state.quiz.name})
-    await ws.send_json({'text': 'Check your name on the screen!'})
+    await ws.send_json({"text": app.state.quiz.name})
+    await ws.send_json({"text": "Check your name on the screen!"})
 
     player = Player(ws, player_name)
     app.state.players.add(player)
 
-    msg = f'{player_name} has connected'
+    msg = f"{player_name} has connected"
     print(msg)
     logging.info(msg)
 
@@ -189,13 +189,13 @@ async def connect(ws: WebSocket, player_name: str):
             logging.info(f"Client {player_name} sent: {data}")
 
             if player.accepting_answer:
-                await player.send({'type': 'repeat', 'text': data['answer']})
+                await player.send({"type": "repeat", "text": data["answer"]})
                 player.accepting_answer = False
                 app.state.results.check_answer(
                     player,
                     app.state.quiz.question,
                     app.state.quiz.current_question,
-                    data['answer']
+                    data["answer"],
                 )
 
     except WebSocketDisconnect:
@@ -204,15 +204,15 @@ async def connect(ws: WebSocket, player_name: str):
 
 
 async def control_server() -> None:
-    '''
+    """
     Interaction with server app in terminal happens here. Joining players and
     sending question is possible in the same time
-    '''
+    """
     print("Registred players:")
 
     while True:
         proceed_char = await aioconsole.ainput("Continue [y/N]:\n")
-        if proceed_char.lower() != 'y':
+        if proceed_char.lower() != "y":
             continue
 
         try:
@@ -225,15 +225,17 @@ async def control_server() -> None:
 
             shutdown_server(msg)
 
-        print(question, end='')
+        print(question, end="")
         app.state.players.unblock_players()
         await app.state.players.send(question.ask())
 
 
 def shutdown_server(msg: str) -> None:
-    '''This way of exit might not be correct but fits the usage of this software'''
+    """This way of exit might not be correct but fits the usage of this software"""
 
-    logging.info(f'{msg}\n')
-    print(f'\n{msg}')
-    os.kill(os.getppid(), signal.SIGTERM)  # Quit parent process - Uvicorn server
-    os.kill(os.getpid(), signal.SIGKILL)   # Kill Quiz server
+    logging.info(f"{msg}\n")
+    print(f"\n{msg}")
+
+    # Quit parent process - Uvicorn server
+    os.kill(os.getppid(), signal.SIGTERM)
+    os.kill(os.getpid(), signal.SIGKILL)  # Kill Quiz server

@@ -1,3 +1,4 @@
+---
 name: Simple example quiz to show how does it work
 questions:
   - text: This question has one correct answer which is A
