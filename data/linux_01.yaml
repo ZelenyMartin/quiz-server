@@ -1,0 +1,57 @@
+---
+name: Základy Linuxu
+questions:
+  - text: Jaký příkaz v Linuxu slouží k zobrazení obsahu aktuálního adresáře?
+    options:
+      - answer: ls
+        correct: true
+      - answer: show
+        correct: false
+      - answer: dir
+        correct: false
+      - answer: list
+        correct: false
+
+  - text: Který ze následujících příkazů použijete k přesměrování standardního výstupu do souboru?
+    options:
+      - answer: ">&"
+        correct: false
+      - answer: ">"
+        correct: true
+      - answer: ">>&"
+        correct: false
+      - answer: ">!"
+        correct: false
+
+  - text: Co dělá příkaz `chmod 755 file.txt`?
+    options:
+      - answer: Přidělí souboru `file.txt` uživatelská práva pouze pro čtení
+        correct: false
+      - answer: Umožní všem uživatelům spouštění souboru `file.txt`
+        correct: true
+      - answer: Zakáže přístup ke souboru `file.txt` pro ostatní uživatele
+        correct: false
+      - answer: Nastaví souboru `file.txt` práva zápisu pro uživatele, skupiny a ostatní uživatele
+        correct: false
+
+  - text: Který skriptovací jazyk je standardně podporován v Linuxu pro automatizaci úloh?
+    options:
+      - answer: Ruby
+        correct: false
+      - answer: JavaScript
+        correct: false
+      - answer: Bash
+        correct: true
+      - answer: Python
+        correct: false
+
+  - text: Jaký je standardní port pro SSH (Secure Shell) v Linuxu?
+    options:
+      - answer: 21
+        correct: false
+      - answer: 22
+        correct: true
+      - answer: 23
+        correct: false
+      - answer: 80
+        correct: false

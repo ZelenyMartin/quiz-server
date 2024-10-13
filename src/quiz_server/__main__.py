@@ -32,8 +32,7 @@ class Question:
     def __str__(self) -> str:
         """Nicely print text of the question with possible answeres"""
 
-        question_label = f"Question number {
-            app.state.quiz.current_question + 1}/{len(app.state.quiz)}"
+        question_label = f"Question number {app.state.quiz.current_question + 1}/{len(app.state.quiz)}"
         logging.info(question_label)
         logging.info(f"Question text: {self.text}")
 
@@ -86,10 +85,16 @@ class Player:
     accepting_answer: bool = False
 
     async def send(self, data: dict):
-        await self._websocket.send_json(data)
+        try:
+            await self._websocket.send_json(data)
+        except RuntimeError:
+            logging.info(f'Player unreachable, cannot send data: {self.name}')
 
     async def close_connection(self, msg: str):
-        await self._websocket.close(reason=msg)
+        try:
+            await self._websocket.close(reason=msg)
+        except RuntimeError:
+            logging.info(f'Player unreachable, cannot close the connection: {self.name}')
 
 
 class Players:
@@ -128,6 +133,7 @@ class Results:
 
     def __str__(self):
         output = "\nResults:\n"
+        output += "Name\tQuestion\tResult\n"
 
         for (name, qustion), result in self._results.items():
             output += f"{name}\t{qustion}\t{result}\n"
@@ -148,8 +154,8 @@ async def lifespan(app: FastAPI):
             quiz_data = yaml.load(file)
 
         app.state.quiz = Quiz(**quiz_data)
-    except (OSError, YAMLError, TypeError):
-        shutdown_server(f"Can't load a quiz file: {quiz_file}")
+    except (OSError, YAMLError, TypeError) as e:
+        shutdown_server(f"Can't load a quiz file: {quiz_file}", exception=e)
 
     app.state.players = Players()
     app.state.results = Results()
@@ -179,7 +185,7 @@ async def connect(ws: WebSocket, player_name: str):
     player = Player(ws, player_name)
     app.state.players.add(player)
 
-    msg = f"{player_name} has connected"
+    msg = f"Player connects: {player_name}"
     print(msg)
     logging.info(msg)
 
@@ -199,8 +205,8 @@ async def connect(ws: WebSocket, player_name: str):
                 )
 
     except WebSocketDisconnect:
-        logging.info(f"{player_name} has disconected")
-        app.state.players.remove(player)
+        logging.info(f"Player disconnects: {player_name}")
+        # app.state.players.remove(player)
 
 
 async def control_server() -> None:
@@ -230,10 +236,13 @@ async def control_server() -> None:
         await app.state.players.send(question.ask())
 
 
-def shutdown_server(msg: str) -> None:
+def shutdown_server(msg: str, exception: Exception = None) -> None:
     """This way of exit might not be correct but fits the usage of this software"""
 
+    if exception:
+        logging.info(f"{exception}")
     logging.info(f"{msg}\n")
+
     print(f"\n{msg}")
 
     # Quit parent process - Uvicorn server
